@@ -12,6 +12,7 @@ import {
   FlatList,
   Platform,
   TouchableOpacity,
+  TextInput,
   View,
 } from 'react-native';
 import { connect } from 'react-redux';
@@ -22,7 +23,7 @@ import {
   multiPoint as makeMultiPoint,
 } from '@turf/helpers';
 import makeBbox from '@turf/bbox';
-import { deviceTitle, isDeviceOnline } from '../../../utils/device';
+import { deviceTitle, isDeviceOnline, isDeviceDefault } from '../../../utils/device';
 import MapUtils from '../../../utils/map';
 import { fetchDevices } from '../../../actions/async/Devices';
 import { Assets } from '../../../constants';
@@ -30,6 +31,9 @@ import { Sheet } from '../../../components';
 import X from '../../../theme';
 import Styles from './DeviceMapStyles';
 import { ApiKeys } from '../../../constants';
+
+
+import { Transition } from 'react-navigation-fluid-transitions';
 
 Mapbox.setAccessToken(ApiKeys.MAPBOX_TOKEN);
 const ONE_WEEK_MILLIS = 7 * 86400 * 1000;
@@ -59,6 +63,8 @@ class DeviceMap extends Component {
       collapsed: true,
       bbox: DEFAULT_MAP_REGION,
       selectedPin: null,
+      isEnteringAddress: false,
+      _width: 100,
     };
     this.handlePressedAllVehicles = this.handlePressedAllVehicles.bind(this);
     this.handlePressedDevice = this.handlePressedDevice.bind(this);
@@ -71,9 +77,21 @@ class DeviceMap extends Component {
     this.onRegionChange = this.onRegionChange.bind(this);
     this.handleMapPress = this.handleMapPress.bind(this);
 
+
+    this.toggleAddressSearch = this.toggleAddressSearch.bind(this);
+
+
     this._compassRotate = new Animated.Value(0);
     this._compassRotateStr = this._compassRotate.interpolate({inputRange: [0,360], outputRange: ['0deg', '360deg']})
     this.backHandler = null;
+
+    this.state._width = new Animated.Value(0);
+
+    // this._widthAnimator = new Animated.Value(0);    
+    // _width = this._widthAnimator.interpolate({inputRange: [0,1], outputRange: [0, 100]})
+
+    // this.animatedTransition = Animated.spring(this._widthAnimator,{toValue:1})
+
   }
 
   componentDidMount() {
@@ -114,6 +132,17 @@ class DeviceMap extends Component {
 
   resetToNorth() {
     this.mapRef.setCamera({heading: 0, duration: 250})
+  }
+
+  
+  toggleAddressSearch() {
+    console.log("toggleAddressSearch()!");
+    // navigation.dispatch(DrawerActions.toggleDrawer())
+    this.setState({isEnteringAddress: !this.state.isEnteringAddress });
+    // this.props.navigation.navigate('MapNav');
+    // this.animatedTransition.start();
+    Animated.timing(this.state._width, { toValue: this.state.isEnteringAddress ? 100 : 250, duration: 250 }).start();
+    console.log("state.isEnteringAddress: " + this.state.isEnteringAddress);
   }
 
   renderVehicleAnnotations() {
@@ -258,20 +287,21 @@ class DeviceMap extends Component {
             style={ Styles.sheetDeviceInfoTitle }>
             { title }
           </X.Text>
+
           { isDeviceOnline(device) ? (
             <View style={ Styles.sheetDeviceInfoStatus }>
               <View style={ Styles.sheetDeviceInfoOnlineBubble } />
               <X.Text
                 color='white'
                 size='small'>
-                Online { device.last_athena_ping < (Date.now()/1000 - 60) ? '(' + moment(device.last_athena_ping*1000).fromNow() + ')' : '' }
+                Online { device.last_athena_ping < (Date.now()/1000 - 60) ? '(' + moment(device.last_athena_ping*1000).fromNow() + ')' : '' } {isDeviceDefault(device) ? "(default)" : ""}
               </X.Text>
             </View>
           ) : (
             <X.Text
               color='lightGrey'
               size='small'>
-              Offline
+              Offline {isDeviceDefault(device) ? "(default)" : ""}
             </X.Text>
           ) }
         </View>
@@ -435,67 +465,102 @@ class DeviceMap extends Component {
           { this.renderVehiclePins() }
         </Mapbox.MapView>
         <View style={ Styles.mapHeader }>
-          <X.Button
-            size='full'
-            color='borderless'
-            style={ Styles.mapHeaderAccount }
-            onPress={ () => this.handlePressedAccount() }>
-            <X.Avatar
-              image={ { uri: user.photo } }
-              color='transparent'
-              shape='circle'
-              size='small'
-              style={ Styles.mapHeaderAccountAvatar } />
-          </X.Button>
-          <View style={ Styles.mapHeaderFilter }>
-            <View style={ Styles.mapHeaderFilterPill }>
-              <X.Button
-                color='borderless'
-                size='full'
-                isFlex={ true }
-                style={ { flexDirection: 'column' }}
-                onPress={ () => this.handlePressedAllVehicles() }>
-                <X.Text
-                  color='white'
-                  weight='semibold'
-                  style={ Styles.mapHeaderFilterTitle }>
-                  All Vehicles
-                </X.Text>
-              </X.Button>
-            </View>
-          </View>
-          <View style={ Styles.mapHeaderHelpers }>
-            <View style={ Styles.mapHeaderHelpersInner }>
-              <X.Button
-                size='full'
-                color='borderless'
-                isFlex={true}
-                onPress={ this.flyToCurrentLocation }
-                style={ Styles.mapHeaderOption }>
-                <X.Image
-                source={ Assets.iconMyLocation }
-                style={{ height: 32, width: 32 }}
-              />
+          { this.state.isEnteringAddress ?
+            <X.Button
+              color='borderless'
+              style={ Styles.mapHeaderAccount }
+              onPress={ this.toggleAddressSearch } >
+              <X.Image
+              source={ Assets.iconChevronLeft }
+              style={ Styles.deviceInfoHeaderBack } />
             </X.Button>
+            :
             <X.Button
               size='full'
               color='borderless'
-              onPress={ this.resetToNorth }
-              style={ Styles.mapHeaderCompass }>
-              <Animated.View style={
-                {
-                  transform: [{
-                    rotate: this._compassRotateStr
-                  }]
-                }
-              } >
-                <Assets.Compass width={ 50 } height={ 50 } />
-              </Animated.View>
+              style={ Styles.mapHeaderAccount }
+              onPress={ () => this.handlePressedAccount() }>
+              <X.Avatar
+                image={ { uri: user.photo } }
+                color='transparent'
+                shape='circle'
+                size='small'
+                style={ Styles.mapHeaderAccountAvatar } />
             </X.Button>
+          }
+           <View style={ Styles.mapHeaderFilter }>
+            <Animated.View style={{ minWidth: this.state._width }}>
+              <View style={ Styles.mapHeaderFilterPill }>
+                { this.state.isEnteringAddress ? 
+                  <TextInput
+                      key='textinput'
+                      value={ "enter address" }
+                      returnKeyType='done'
+                      weight='semibold'
+                      style={ Styles.mapHeaderSearchBar} />
+                    :
+                   <X.Button
+                    color='borderless'
+                    size='full'
+                    isFlex={ true }
+                    style={ { flexDirection: 'column' }}
+                    onPress={ () => this.handlePressedAllVehicles() }>
+                    <X.Text
+                      color='white'
+                      weight='semibold'
+                      style={ Styles.mapHeaderFilterTitle }>
+                      All Vehicles
+                    </X.Text>
+                  </X.Button>
+                }
+              </View>
+            </Animated.View>
+          </View>
+            <View style={ Styles.mapHeaderHelpers }>
+              <View style={ Styles.mapHeaderHelpersInner }>
+                <X.Button
+                  size='full'
+                  color='borderless'
+                  isFlex={true}
+                  onPress={ this.flyToCurrentLocation }
+                  style={ Styles.mapHeaderOption }>
+                  <X.Image
+                  source={ Assets.iconMyLocation }
+                  style={{ height: 32, width: 32 }}
+                />
+              </X.Button>
+              <X.Button
+                size='full'
+                color='borderless'
+                onPress={ this.resetToNorth }
+                isFlex={ true }
+                style={ { flexDirection: 'column' }}
+                style={ Styles.mapHeaderCompass }>
+                <Animated.View style={
+                  {
+                    transform: [{
+                      rotate: this._compassRotateStr
+                    }]
+                  }
+                } >
+                  <Assets.Compass width={ 50 } height={ 50 } />
+                </Animated.View>
+              </X.Button>
+              { !this.state.isEnteringAddress &&
+                <X.Button
+                  size='full'
+                  color='borderless'              
+                  onPress={ this.toggleAddressSearch }
+                  isFlex={ true }
+                  style={ { flexDirection: 'column' }}
+                  style={ Styles.mapHeaderNav }>
+                  <X.Text style={{color:'#EAEAEA', fontSize:14, textAlign: 'center',}}>NAV</X.Text>
+                </X.Button>
+              }
+              
+            </View>
           </View>
         </View>
-      </View>
-
         <Sheet
           animation='easeInEaseOut'
           touchEnabled={ this.state.deviceListIsAtTop }
@@ -569,7 +634,7 @@ class DeviceMap extends Component {
               <X.Button
                 style={ { paddingLeft: 20, paddingRight: 20, } }
                 onPress={ () => this.props.navigation.navigate('SetupPairing') }>
-                Setup new device
+                Setup new device23
               </X.Button>
             </View>
           }
